@@ -139,6 +139,7 @@ class PricingRule(Document):
 		self.validate_price_list_with_currency()
 		self.validate_dates()
 		self.validate_condition()
+		self.validate_mixed_with_recursion()
 
 		if not self.margin_type:
 			self.margin_rate_or_amount = 0.0
@@ -185,7 +186,8 @@ class PricingRule(Document):
 			if not self.priority:
 				throw(
 					_("As the field {0} is enabled, the field {1} is mandatory.").format(
-						frappe.bold("Apply Discount on Discounted Rate"), frappe.bold("Priority")
+						frappe.bold(_("Apply Discount on Discounted Rate")),
+						frappe.bold(_("Priority")),
 					)
 				)
 
@@ -193,7 +195,7 @@ class PricingRule(Document):
 				throw(
 					_(
 						"As the field {0} is enabled, the value of the field {1} should be more than 1."
-					).format(frappe.bold("Apply Discount on Discounted Rate"), frappe.bold("Priority"))
+					).format(frappe.bold(_("Apply Discount on Discounted Rate")), frappe.bold(_("Priority")))
 				)
 
 	def validate_applicable_for_selling_or_buying(self):
@@ -308,6 +310,10 @@ class PricingRule(Document):
 		):
 			frappe.throw(_("Invalid condition expression"))
 
+	def validate_mixed_with_recursion(self):
+		if self.mixed_conditions and self.is_recursive:
+			frappe.throw(_("Recursive Discounts with Mixed condition is not supported by the system"))
+
 
 # --------------------------------------------------------------------------------
 
@@ -409,6 +415,8 @@ def get_pricing_rule_for_item(args, doc=None, for_validate=False):
 			"parent": args.parent,
 			"parenttype": args.parenttype,
 			"child_docname": args.get("child_docname"),
+			"discount_percentage": 0.0,
+			"discount_amount": 0,
 		}
 	)
 
@@ -440,7 +448,20 @@ def get_pricing_rule_for_item(args, doc=None, for_validate=False):
 			if isinstance(pricing_rule, str):
 				pricing_rule = frappe.get_cached_doc("Pricing Rule", pricing_rule)
 				update_pricing_rule_uom(pricing_rule, args)
-				pricing_rule.apply_rule_on_other_items = get_pricing_rule_items(pricing_rule) or []
+				fetch_other_item = True if pricing_rule.apply_rule_on_other else False
+				pricing_rule.apply_rule_on_other_items = (
+					get_pricing_rule_items(pricing_rule, other_items=fetch_other_item) or []
+				)
+
+			if pricing_rule.coupon_code_based == 1:
+				if not args.coupon_code:
+					return item_details
+
+				coupon_code = frappe.db.get_value(
+					doctype="Coupon Code", filters={"pricing_rule": pricing_rule.name}, fieldname="name"
+				)
+				if args.coupon_code != coupon_code:
+					continue
 
 			if pricing_rule.get("suggestion"):
 				continue
@@ -466,9 +487,6 @@ def get_pricing_rule_for_item(args, doc=None, for_validate=False):
 					item_details["apply_rule_on_other_items"] = json.dumps(
 						pricing_rule.apply_rule_on_other_items
 					)
-
-			if pricing_rule.coupon_code_based == 1 and args.coupon_code is None:
-				return item_details
 
 			if not pricing_rule.validate_applied_rule:
 				if pricing_rule.price_or_product_discount == "Price":

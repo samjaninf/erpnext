@@ -8,9 +8,19 @@ app_email = "info@erpnext.com"
 app_license = "GNU General Public License (v3)"
 source_link = "https://github.com/frappe/erpnext"
 app_logo_url = "/assets/erpnext/images/erpnext-logo.svg"
+app_home = "/app/home"
 
+add_to_apps_screen = [
+	{
+		"name": app_name,
+		"logo": "/assets/erpnext/images/erpnext-logo-blue.png",
+		"title": app_title,
+		"route": app_home,
+		"has_permission": "erpnext.check_app_permission",
+	}
+]
 
-develop_version = "14.x.x-develop"
+develop_version = "15.x.x-develop"
 
 app_include_js = "erpnext.bundle.js"
 app_include_css = "erpnext.bundle.css"
@@ -24,6 +34,14 @@ doctype_js = {
 	"Event": "public/js/event.js",
 	"Newsletter": "public/js/newsletter.js",
 	"Contact": "public/js/contact.js",
+}
+doctype_list_js = {
+	"Code List": [
+		"edi/doctype/code_list/code_list_import.js",
+	],
+	"Common Code": [
+		"edi/doctype/code_list/code_list_import.js",
+	],
 }
 
 override_doctype_class = {"Address": "erpnext.accounts.custom.address.ERPNextAddress"}
@@ -375,6 +393,7 @@ doc_events = {
 # function should expect the variable and doc as arguments
 naming_series_variables = {
 	"FY": "erpnext.accounts.utils.parse_naming_series_variable",
+	"ABBR": "erpnext.accounts.utils.parse_naming_series_variable",
 }
 
 # On cancel event Payment Entry will be exempted and all linked submittable doctype will get cancelled.
@@ -388,7 +407,6 @@ scheduler_events = {
 	"cron": {
 		"0/15 * * * *": [
 			"erpnext.manufacturing.doctype.bom_update_log.bom_update_log.resume_bom_cost_update_jobs",
-			"erpnext.accounts.doctype.process_payment_reconciliation.process_payment_reconciliation.trigger_reconciliation_for_queued_docs",
 		],
 		"0/30 * * * *": [
 			"erpnext.utilities.doctype.video.video.update_youtube_data",
@@ -435,6 +453,7 @@ scheduler_events = {
 		"erpnext.accounts.doctype.process_statement_of_accounts.process_statement_of_accounts.send_auto_email",
 		"erpnext.accounts.utils.auto_create_exchange_rate_revaluation_daily",
 		"erpnext.accounts.utils.run_ledger_health_checks",
+		"erpnext.assets.doctype.asset_maintenance_log.asset_maintenance_log.update_asset_maintenance_log_status",
 	],
 	"weekly": [
 		"erpnext.accounts.utils.auto_create_exchange_rate_revaluation_weekly",
@@ -448,6 +467,7 @@ scheduler_events = {
 	],
 	"monthly_long": [
 		"erpnext.accounts.deferred_revenue.process_deferred_accounting",
+		"erpnext.accounts.utils.auto_create_exchange_rate_revaluation_monthly",
 	],
 }
 
@@ -535,6 +555,8 @@ accounting_dimension_doctypes = [
 	"Payment Reconciliation",
 	"Payment Reconciliation Allocation",
 	"Payment Request",
+	"Asset Movement Item",
+	"Asset Depreciation Schedule",
 ]
 
 get_matching_queries = (

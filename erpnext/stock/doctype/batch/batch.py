@@ -2,7 +2,7 @@
 # License: GNU General Public License v3. See license.txt
 
 
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 import frappe
 from frappe import _
@@ -158,6 +158,10 @@ class Batch(Document):
 
 	def set_batchwise_valuation(self):
 		if self.is_new():
+			if frappe.db.get_single_value("Stock Settings", "do_not_use_batchwise_valuation"):
+				self.use_batchwise_valuation = 0
+				return
+
 			self.use_batchwise_valuation = 1
 
 	def before_save(self):
@@ -184,9 +188,9 @@ class Batch(Document):
 		if has_expiry_date and not self.expiry_date:
 			frappe.throw(
 				msg=_("Please set {0} for Batched Item {1}, which is used to set {2} on Submit.").format(
-					frappe.bold("Shelf Life in Days"),
+					frappe.bold(_("Shelf Life in Days")),
 					get_link_to_form("Item", self.item),
-					frappe.bold("Batch Expiry Date"),
+					frappe.bold(_("Batch Expiry Date")),
 				),
 				title=_("Expiry Date Mandatory"),
 			)
@@ -445,11 +449,14 @@ def get_available_batches(kwargs):
 		get_auto_batch_nos,
 	)
 
-	batchwise_qty = defaultdict(float)
+	batchwise_qty = OrderedDict()
 
 	batches = get_auto_batch_nos(kwargs)
 	for batch in batches:
-		batchwise_qty[batch.get("batch_no")] += batch.get("qty")
+		if batch.get("batch_no") not in batchwise_qty:
+			batchwise_qty[batch.get("batch_no")] = batch.get("qty")
+		else:
+			batchwise_qty[batch.get("batch_no")] += batch.get("qty")
 
 	return batchwise_qty
 

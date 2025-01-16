@@ -40,9 +40,13 @@
   "show_payment_schedule_in_print",
   "currency_exchange_section",
   "allow_stale",
+  "column_break_yuug",
+  "stale_days",
   "section_break_jpd0",
   "auto_reconcile_payments",
-  "stale_days",
+  "auto_reconciliation_job_trigger",
+  "reconciliation_queue_size",
+  "column_break_resa",
   "invoicing_settings_tab",
   "accounts_transactions_settings_section",
   "over_billing_allowance",
@@ -55,6 +59,8 @@
   "post_change_gl_entries",
   "assets_tab",
   "asset_settings_section",
+  "calculate_depr_using_total_days",
+  "column_break_gjcc",
   "book_asset_depreciation_entry_automatically",
   "closing_settings_tab",
   "period_closing_settings_section",
@@ -71,7 +77,9 @@
   "remarks_section",
   "general_ledger_remarks_length",
   "column_break_lvjk",
-  "receivable_payable_remarks_length"
+  "receivable_payable_remarks_length",
+  "payment_request_settings",
+  "create_pr_in_draft_status"
  ],
  "fields": [
   {
@@ -462,6 +470,51 @@
    "fieldname": "enable_immutable_ledger",
    "fieldtype": "Check",
    "label": "Enable Immutable Ledger"
+  },
+  {
+   "fieldname": "column_break_gjcc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Enable this option to calculate daily depreciation by considering the total number of days in the entire depreciation period, (including leap years) while using daily pro-rata based depreciation",
+   "fieldname": "calculate_depr_using_total_days",
+   "fieldtype": "Check",
+   "label": "Calculate daily depreciation using total days in depreciation period"
+  },
+  {
+   "description": "Payment Request created from Sales Order or Purchase Order will be in Draft status. When disabled document will be in unsaved state.",
+   "fieldname": "payment_request_settings",
+   "fieldtype": "Tab Break",
+   "label": "Payment Request"
+  },
+  {
+   "default": "1",
+   "fieldname": "create_pr_in_draft_status",
+   "fieldtype": "Check",
+   "label": "Create in Draft Status"
+  },
+  {
+   "fieldname": "column_break_yuug",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_resa",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "15",
+   "description": "Interval should be between 1 to 59 MInutes",
+   "fieldname": "auto_reconciliation_job_trigger",
+   "fieldtype": "Int",
+   "label": "Auto Reconciliation Job Trigger"
+  },
+  {
+   "default": "5",
+   "description": "Documents Processed on each trigger. Queue Size should be between 5 and 100",
+   "fieldname": "reconciliation_queue_size",
+   "fieldtype": "Int",
+   "label": "Reconciliation Queue Size"
   }
  ],
  "icon": "icon-cog",
@@ -469,7 +522,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2024-05-11 23:19:44.673975",
+ "modified": "2025-01-13 17:38:39.661320",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Accounts Settings",
