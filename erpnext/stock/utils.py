@@ -58,7 +58,10 @@ def get_stock_value_from_bin(warehouse=None, item_code=None):
 
 
 def get_stock_value_on(
-	warehouses: list | str | None = None, posting_date: str | None = None, item_code: str | None = None
+	warehouses: list | str | None = None,
+	posting_date: str | None = None,
+	item_code: str | None = None,
+	company: str | None = None,
 ) -> float:
 	if not posting_date:
 		posting_date = nowdate()
@@ -83,6 +86,9 @@ def get_stock_value_on(
 
 	if item_code:
 		query = query.where(sle.item_code == item_code)
+
+	if company:
+		query = query.where(sle.company == company)
 
 	return query.run(as_list=True)[0][0]
 
@@ -200,7 +206,7 @@ def get_bin(item_code, warehouse):
 	if not bin:
 		bin_obj = _create_bin(item_code, warehouse)
 	else:
-		bin_obj = frappe.get_doc("Bin", bin, for_update=True)
+		bin_obj = frappe.get_doc("Bin", bin)
 	bin_obj.flags.ignore_permissions = True
 	return bin_obj
 
@@ -244,6 +250,8 @@ def get_incoming_rate(args, raise_error_if_no_rate=True):
 		"Item", args.get("item_code"), ["has_serial_no", "has_batch_no"], as_dict=1
 	)
 
+	use_moving_avg_for_batch = frappe.db.get_single_value("Stock Settings", "do_not_use_batchwise_valuation")
+
 	if isinstance(args, dict):
 		args = frappe._dict(args)
 
@@ -257,7 +265,12 @@ def get_incoming_rate(args, raise_error_if_no_rate=True):
 
 		return sn_obj.get_incoming_rate()
 
-	elif item_details and item_details.has_batch_no and args.get("serial_and_batch_bundle"):
+	elif (
+		item_details
+		and item_details.has_batch_no
+		and args.get("serial_and_batch_bundle")
+		and not use_moving_avg_for_batch
+	):
 		args.actual_qty = args.qty
 		batch_obj = BatchNoValuation(
 			sle=args,
@@ -274,7 +287,7 @@ def get_incoming_rate(args, raise_error_if_no_rate=True):
 		sn_obj = SerialNoValuation(sle=args, warehouse=args.get("warehouse"), item_code=args.get("item_code"))
 
 		return sn_obj.get_incoming_rate()
-	elif args.get("batch_no") and not args.get("serial_and_batch_bundle"):
+	elif args.get("batch_no") and not args.get("serial_and_batch_bundle") and not use_moving_avg_for_batch:
 		args.actual_qty = args.qty
 		args.batch_nos = frappe._dict({args.batch_no: args})
 
@@ -651,3 +664,26 @@ def get_combine_datetime(posting_date, posting_time):
 		posting_time = (datetime.datetime.min + posting_time).time()
 
 	return datetime.datetime.combine(posting_date, posting_time).replace(microsecond=0)
+
+
+@frappe.request_cache
+def get_default_stock_uom() -> str | None:
+	if default_uom := frappe.get_cached_value("Stock Settings", None, "stock_uom"):
+		return default_uom
+
+	acceptable_default_uoms = dict.fromkeys(
+		(
+			"Nos",
+			# In the past, we used to create translated UOMs during initial setup.
+			# These could either be in the system language...
+			_("Nos", frappe.get_system_settings("language")),
+			# or the current user's language
+			_("Nos"),
+		)
+	)
+
+	available_default_uoms = frappe.db.get_values(
+		"UOM", {"name": ("in", tuple(acceptable_default_uoms))}, pluck="name"
+	)
+
+	return next((uom for uom in acceptable_default_uoms if uom in available_default_uoms), None)

@@ -6,8 +6,9 @@ from frappe import _
 from frappe.utils import cstr, flt
 from frappe.utils.file_manager import remove_file
 
-from erpnext.controllers.taxes_and_totals import get_itemised_tax
+from erpnext.controllers.taxes_and_totals import ItemWiseTaxDetail, get_itemised_tax
 from erpnext.regional.italy import state_codes
+from erpnext.stock.utils import get_default_stock_uom
 
 
 def update_itemised_tax_data(doc):
@@ -159,7 +160,7 @@ def get_invoice_summary(items, taxes):
 						rate=reference_row.tax_amount,
 						qty=1.0,
 						amount=reference_row.tax_amount,
-						stock_uom=frappe.db.get_single_value("Stock Settings", "stock_uom") or "Nos",
+						stock_uom=get_default_stock_uom(),
 						tax_rate=tax.rate,
 						tax_amount=(reference_row.tax_amount * tax.rate) / 100,
 						net_amount=reference_row.tax_amount,
@@ -214,16 +215,16 @@ def get_invoice_summary(items, taxes):
 
 		else:
 			item_wise_tax_detail = json.loads(tax.item_wise_tax_detail)
-			for rate_item in [
-				tax_item for tax_item in item_wise_tax_detail.items() if tax_item[1][0] == tax.rate
-			]:
+			# TODO: with net_amount stored inside item_wise_tax_detail, this entire block seems obsolete and redundant
+			for _item_code, tax_data in item_wise_tax_detail.items():
+				tax_data = ItemWiseTaxDetail(**tax_data)
+				if tax_data.tax_rate != tax.rate:
+					continue
 				key = cstr(tax.rate)
 				if not summary_data.get(key):
 					summary_data.setdefault(key, {"tax_amount": 0.0, "taxable_amount": 0.0})
-				summary_data[key]["tax_amount"] += rate_item[1][1]
-				summary_data[key]["taxable_amount"] += sum(
-					[item.net_amount for item in items if item.item_code == rate_item[0]]
-				)
+				summary_data[key]["tax_amount"] += tax_data.tax_amount
+				summary_data[key]["taxable_amount"] += tax_data.net_amount
 
 			for item in items:
 				key = cstr(tax.rate)

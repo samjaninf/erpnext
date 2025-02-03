@@ -124,6 +124,7 @@
    "options": "DocType",
    "print_width": "150px",
    "read_only": 1,
+   "search_index": 1,
    "width": "150px"
   },
   {
@@ -352,7 +353,8 @@
   {
    "fieldname": "posting_datetime",
    "fieldtype": "Datetime",
-   "label": "Posting Datetime"
+   "label": "Posting Datetime",
+   "search_index": 1
   }
  ],
  "hide_toolbar": 1,
@@ -361,7 +363,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-06-27 16:23:18.820049",
+ "modified": "2024-12-23 18:03:05.171023",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Stock Ledger Entry",

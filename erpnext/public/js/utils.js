@@ -20,7 +20,11 @@ $.extend(erpnext, {
 	},
 
 	toggle_naming_series: function () {
-		if (cur_frm && cur_frm.fields_dict.naming_series) {
+		if (
+			cur_frm &&
+			cur_frm.fields_dict.naming_series &&
+			cur_frm.meta.naming_rule == 'By "Naming Series" field'
+		) {
 			cur_frm.toggle_display("naming_series", cur_frm.doc.__islocal ? true : false);
 		}
 	},
@@ -420,7 +424,7 @@ $.extend(erpnext.utils, {
 		});
 	},
 
-	get_fiscal_year: function (date, with_dates = false, boolean = false) {
+	get_fiscal_year: function (date, with_dates = false, raise_on_missing = true) {
 		if (!frappe.boot.setup_complete) {
 			return;
 		}
@@ -429,20 +433,30 @@ $.extend(erpnext.utils, {
 		}
 
 		let fiscal_year = "";
-		frappe.call({
-			method: "erpnext.accounts.utils.get_fiscal_year",
-			args: {
-				date: date,
-				boolean: boolean,
-			},
-			async: false,
-			callback: function (r) {
-				if (r.message) {
-					if (with_dates) fiscal_year = r.message;
-					else fiscal_year = r.message[0];
-				}
-			},
-		});
+		if (
+			frappe.boot.current_fiscal_year &&
+			date >= frappe.boot.current_fiscal_year[1] &&
+			date <= frappe.boot.current_fiscal_year[2]
+		) {
+			if (with_dates) fiscal_year = frappe.boot.current_fiscal_year;
+			else fiscal_year = frappe.boot.current_fiscal_year[0];
+		} else {
+			frappe.call({
+				method: "erpnext.accounts.utils.get_fiscal_year",
+				type: "GET", // make it cacheable
+				args: {
+					date: date,
+					raise_on_missing: raise_on_missing,
+				},
+				async: false,
+				callback: function (r) {
+					if (r.message) {
+						if (with_dates) fiscal_year = r.message;
+						else fiscal_year = r.message[0];
+					}
+				},
+			});
+		}
 		return fiscal_year;
 	},
 });
@@ -608,6 +622,7 @@ erpnext.utils.update_child_items = function (opts) {
 			docname: d.name,
 			name: d.name,
 			item_code: d.item_code,
+			item_name: d.item_name,
 			delivery_date: d.delivery_date,
 			schedule_date: d.schedule_date,
 			conversion_factor: d.conversion_factor,
@@ -654,6 +669,75 @@ erpnext.utils.update_child_items = function (opts) {
 					filters: filters,
 				};
 			},
+			onchange: function () {
+				const me = this;
+
+				frm.call({
+					method: "erpnext.stock.get_item_details.get_item_details",
+					args: {
+						doc: frm.doc,
+						ctx: {
+							item_code: this.value,
+							set_warehouse: frm.doc.set_warehouse,
+							customer: frm.doc.customer || frm.doc.party_name,
+							quotation_to: frm.doc.quotation_to,
+							supplier: frm.doc.supplier,
+							currency: frm.doc.currency,
+							is_internal_supplier: frm.doc.is_internal_supplier,
+							is_internal_customer: frm.doc.is_internal_customer,
+							conversion_rate: frm.doc.conversion_rate,
+							price_list: frm.doc.selling_price_list || frm.doc.buying_price_list,
+							price_list_currency: frm.doc.price_list_currency,
+							plc_conversion_rate: frm.doc.plc_conversion_rate,
+							company: frm.doc.company,
+							order_type: frm.doc.order_type,
+							is_pos: cint(frm.doc.is_pos),
+							is_return: cint(frm.doc.is_return),
+							is_subcontracted: frm.doc.is_subcontracted,
+							ignore_pricing_rule: frm.doc.ignore_pricing_rule,
+							doctype: frm.doc.doctype,
+							name: frm.doc.name,
+							qty: me.doc.qty || 1,
+							uom: me.doc.uom,
+							pos_profile: cint(frm.doc.is_pos) ? frm.doc.pos_profile : "",
+							tax_category: frm.doc.tax_category,
+							child_doctype: frm.doc.doctype + " Item",
+							is_old_subcontracting_flow: frm.doc.is_old_subcontracting_flow,
+						},
+					},
+					callback: function (r) {
+						if (r.message) {
+							const {
+								qty,
+								price_list_rate: rate,
+								uom,
+								conversion_factor,
+								item_name,
+							} = r.message;
+
+							const row = dialog.fields_dict.trans_items.df.data.find(
+								(doc) => doc.idx == me.doc.idx
+							);
+							if (row) {
+								Object.assign(row, {
+									conversion_factor: me.doc.conversion_factor || conversion_factor,
+									uom: me.doc.uom || uom,
+									qty: me.doc.qty || qty,
+									rate: me.doc.rate || rate,
+									item_name: item_name,
+								});
+								dialog.fields_dict.trans_items.grid.refresh();
+							}
+						}
+					},
+				});
+			},
+		},
+		{
+			fieldtype: "Data",
+			fieldname: "item_name",
+			label: __("Item Name"),
+			read_only: 1,
 		},
 		{
 			fieldtype: "Link",
@@ -921,6 +1005,7 @@ erpnext.utils.map_current_doc = function (opts) {
 			target: opts.target,
 			date_field: opts.date_field || undefined,
 			setters: opts.setters,
+			read_only_setters: opts.read_only_setters,
 			data_fields: data_fields,
 			get_query: opts.get_query,
 			add_filters_group: 1,
@@ -962,41 +1047,36 @@ erpnext.utils.map_current_doc = function (opts) {
 	}
 };
 
-frappe.form.link_formatters["Item"] = function (value, doc) {
-	if (doc && value && doc.item_name && doc.item_name !== value && doc.item_code === value) {
-		return value + ": " + doc.item_name;
-	} else if (!value && doc.doctype && doc.item_name) {
-		// format blank value in child table
-		return doc.item_name;
-	} else {
-		// if value is blank in report view or item code and name are the same, return as is
-		return value;
-	}
+frappe.form.link_formatters["Item"] = function (value, doc, df) {
+	return add_link_title(value, doc, df, "item_name");
 };
 
-frappe.form.link_formatters["Employee"] = function (value, doc) {
-	if (doc && value && doc.employee_name && doc.employee_name !== value && doc.employee === value) {
-		return value + ": " + doc.employee_name;
-	} else if (!value && doc.doctype && doc.employee_name) {
-		// format blank value in child table
-		return doc.employee;
-	} else {
-		// if value is blank in report view or project name and name are the same, return as is
-		return value;
-	}
+frappe.form.link_formatters["Employee"] = function (value, doc, df) {
+	return add_link_title(value, doc, df, "employee_name");
 };
 
-frappe.form.link_formatters["Project"] = function (value, doc) {
-	if (doc && value && doc.project_name && doc.project_name !== value && doc.project === value) {
-		return value + ": " + doc.project_name;
-	} else if (!value && doc.doctype && doc.project_name) {
-		// format blank value in child table
-		return doc.project;
+frappe.form.link_formatters["Project"] = function (value, doc, df) {
+	return add_link_title(value, doc, df, "project_name");
+};
+
+/**
+ * Add a title to a link value based on the provided document and field information.
+ *
+ * @param {string} value - The value to add a link title to.
+ * @param {Object} doc - The document object.
+ * @param {Object} df - The field object.
+ * @param {string} title_field - The field name for the title.
+ * @returns {string} - The link value with the added title.
+ */
+function add_link_title(value, doc, df, title_field) {
+	if (doc && value && doc[title_field] && doc[title_field] !== value && doc[df.fieldname] === value) {
+		return value + ": " + doc[title_field];
+	} else if (!value && doc.doctype && doc[title_field]) {
+		return doc[title_field];
 	} else {
-		// if value is blank in report view or project name and name are the same, return as is
 		return value;
 	}
-};
+}
 
 // add description on posting time
 $(document).on("app_ready", function () {

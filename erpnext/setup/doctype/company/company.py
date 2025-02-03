@@ -31,7 +31,7 @@ class Company(NestedSet):
 		accumulated_depreciation_account: DF.Link | None
 		allow_account_creation_against_child_company: DF.Check
 		asset_received_but_not_billed: DF.Link | None
-		auto_err_frequency: DF.Literal["Daily", "Weekly"]
+		auto_err_frequency: DF.Literal["Daily", "Weekly", "Monthly"]
 		auto_exchange_rate_revaluation: DF.Check
 		book_advance_payments_in_separate_party_account: DF.Check
 		capital_work_in_progress_account: DF.Link | None
@@ -87,10 +87,14 @@ class Company(NestedSet):
 		payment_terms: DF.Link | None
 		phone_no: DF.Data | None
 		reconcile_on_advance_payment_date: DF.Check
+		reconciliation_takes_effect_on: DF.Literal[
+			"Advance Payment Date", "Oldest Of Invoice Or Advance", "Reconciliation Date"
+		]
 		registration_details: DF.Code | None
 		rgt: DF.Int
 		round_off_account: DF.Link | None
 		round_off_cost_center: DF.Link | None
+		round_off_for_opening: DF.Link | None
 		sales_monthly_history: DF.SmallText | None
 		series_for_depreciation_entry: DF.Data | None
 		stock_adjustment_account: DF.Link | None
@@ -202,7 +206,7 @@ class Company(NestedSet):
 		):
 			frappe.throw(
 				_("'{0}' should be in company currency {1}.").format(
-					frappe.bold("Default Advance Received Account"), frappe.bold(self.default_currency)
+					frappe.bold(_("Default Advance Received Account")), frappe.bold(self.default_currency)
 				)
 			)
 
@@ -213,7 +217,7 @@ class Company(NestedSet):
 		):
 			frappe.throw(
 				_("'{0}' should be in company currency {1}.").format(
-					frappe.bold("Default Advance Paid Account"), frappe.bold(self.default_currency)
+					frappe.bold(_("Default Advance Paid Account")), frappe.bold(self.default_currency)
 				)
 			)
 
@@ -444,7 +448,7 @@ class Company(NestedSet):
 			):
 				frappe.throw(
 					_("Set default {0} account for non stock items").format(
-						frappe.bold("Provisional Account")
+						frappe.bold(_("Provisional Account"))
 					)
 				)
 
@@ -906,6 +910,14 @@ def get_default_company_address(name, sort_key="is_primary_address", existing_ad
 		return max(out, key=lambda x: x[1])[0]  # find max by sort_key
 	else:
 		return None
+
+
+@frappe.whitelist()
+def get_billing_shipping_address(name, billing_address=None, shipping_address=None):
+	primary_address = get_default_company_address(name, "is_primary_address", billing_address)
+	shipping_address = get_default_company_address(name, "is_shipping_address", shipping_address)
+
+	return {"primary_address": primary_address, "shipping_address": shipping_address}
 
 
 @frappe.whitelist()
